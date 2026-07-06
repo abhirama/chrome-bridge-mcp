@@ -1,0 +1,57 @@
+{
+  "name": "chrome-bridge-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that drives your already-running, already-logged-in Chrome via a companion extension using chrome.debugger/CDP. Clean-room equivalent of the Codex/ChatGPT desktop Chrome tool.",
+  "type": "module",
+  "bin": {
+    "chrome-bridge-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "extension",
+    "skills",
+    "assets",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && chmod +x dist/index.js",
+    "dev": "tsc -p tsconfig.json --watch",
+    "start": "node dist/index.js",
+    "hub": "node dist/index.js --hub-only",
+    "test": "node test/security.mjs && node test/smoke.mjs && node test/multi-client.mjs",
+    "test:coexist": "node test/two-extensions.mjs",
+    "test:e2e": "node test/e2e.mjs",
+    "test:all": "npm run test && npm run test:e2e",
+    "setup": "node dist/index.js setup"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "ws": "^8.21.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.7.2"
+  },
+  "keywords": [
+    "mcp",
+    "chrome",
+    "cdp",
+    "browser",
+    "automation",
+    "model-context-protocol"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ShalomObongo/chrome-bridge-mcp.git"
+  },
+  "homepage": "https://github.com/ShalomObongo/chrome-bridge-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/ShalomObongo/chrome-bridge-mcp/issues"
+  }
+}
