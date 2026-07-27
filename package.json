@@ -13,7 +13,8 @@
     "build": "tsc -p tsconfig.json && chmod +x dist/index.js",
     "dev": "tsc -p tsconfig.json --watch",
     "start": "node dist/index.js",
-    "hub": "node dist/index.js --hub-only"
+    "hub": "node dist/index.js --hub-only",
+    "test": "node test/smoke.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
