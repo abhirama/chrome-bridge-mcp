@@ -14,7 +14,10 @@
     "dev": "tsc -p tsconfig.json --watch",
     "start": "node dist/index.js",
     "hub": "node dist/index.js --hub-only",
-    "test": "node test/smoke.mjs"
+    "test": "node test/security.mjs && node test/smoke.mjs && node test/multi-client.mjs",
+    "test:e2e": "node test/e2e.mjs",
+    "test:coexist": "node test/two-extensions.mjs",
+    "test:all": "npm run test && npm run test:e2e"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
