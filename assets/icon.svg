@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Chrome Bridge">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1E2B3A"/>
+      <stop offset="1" stop-color="#0B121B"/>
+    </linearGradient>
+    <linearGradient id="span" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#34D399"/>
+      <stop offset="0.55" stop-color="#12B886"/>
+      <stop offset="1" stop-color="#0EA5A4"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+  <rect x="1.5" y="1.5" width="125" height="125" rx="26.5" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="3"/>
+
+  <!-- Main cable: the span between the agent and the browser. -->
+  <path d="M33 45 Q 64 79 95 45" fill="none" stroke="url(#span)" stroke-width="10" stroke-linecap="round"/>
+
+  <!-- Towers -->
+  <g stroke="#DCE6F0" stroke-opacity="0.7" stroke-width="9" stroke-linecap="round">
+    <path d="M33 47 V88"/>
+    <path d="M95 47 V88"/>
+  </g>
+
+  <!-- Deck -->
+  <path d="M20 92 H108" stroke="#F4F8FC" stroke-width="11" stroke-linecap="round"/>
+
+  <!-- Anchor nodes -->
+  <circle cx="33" cy="42" r="12" fill="#34D399"/>
+  <circle cx="95" cy="42" r="12" fill="#0EA5A4"/>
+</svg>
