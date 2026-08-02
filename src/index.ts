@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { DEFAULT_PORT, Hub } from "./hub.js";
 import { registerTools } from "./tools.js";
+import { runSetup } from "./setup.js";
 
 const VERSION = "0.1.0";
 
@@ -17,6 +18,18 @@ function readOption(name: string, fallback?: string): string | undefined {
 
 const extensionDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "extension");
 
+// `setup` registers the server with the user's MCP clients, then exits. It must
+// never fall through to main(), which would bind the bridge port.
+if (process.argv[2] === "setup") {
+  try {
+    await runSetup(process.argv.slice(3));
+    process.exit(0);
+  } catch (error) {
+    console.error(`[chrome-bridge] setup failed: ${(error as Error)?.message ?? error}`);
+    process.exit(1);
+  }
+}
+
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log(
     [
@@ -25,7 +38,18 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
       "MCP server that drives your already-running, already-logged-in Chrome",
       "through a companion extension using chrome.debugger (CDP).",
       "",
-      "Usage: chrome-bridge-mcp [options]",
+      "Usage:",
+      "  chrome-bridge-mcp setup            Interactive: choose your agents and global/project scope",
+      "  chrome-bridge-mcp [options]        Run the MCP server on stdio (what your client invokes)",
+      "",
+      "Setup flags (skip the prompts):",
+      "  --client <id>  claude-code, codex, cursor, vscode, windsurf, claude-desktop,",
+      "                 copilot-cli, gemini",
+      "  --global       Install for every project (default)",
+      "  --project      Install for the current directory only",
+      "  --project-dir <path>  Use this directory instead of the working directory",
+      "  --yes          Non-interactive: every detected client, global scope",
+      "  --dry-run      Show what would change and exit",
       "",
       "Options:",
       `  --port <n>     WebSocket bridge port (default ${DEFAULT_PORT}, env CHROME_BRIDGE_PORT)`,

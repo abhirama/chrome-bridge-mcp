@@ -6,6 +6,13 @@
   "bin": {
     "chrome-bridge-mcp": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "extension",
+    "skills",
+    "assets",
+    "README.md"
+  ],
   "engines": {
     "node": ">=20"
   },
@@ -15,9 +22,10 @@
     "start": "node dist/index.js",
     "hub": "node dist/index.js --hub-only",
     "test": "node test/security.mjs && node test/smoke.mjs && node test/multi-client.mjs",
-    "test:e2e": "node test/e2e.mjs",
     "test:coexist": "node test/two-extensions.mjs",
-    "test:all": "npm run test && npm run test:e2e"
+    "test:e2e": "node test/e2e.mjs",
+    "test:all": "npm run test && npm run test:e2e",
+    "setup": "node dist/index.js setup"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -37,5 +45,13 @@
     "automation",
     "model-context-protocol"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ShalomObongo/chrome-bridge-mcp.git"
+  },
+  "homepage": "https://github.com/ShalomObongo/chrome-bridge-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/ShalomObongo/chrome-bridge-mcp/issues"
+  }
 }
