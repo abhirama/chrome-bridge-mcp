@@ -115,7 +115,10 @@ async function main() {
   registerTools(server, hub, { pageBadge });
   await server.connect(new StdioServerTransport());
 
+  let shuttingDown = false;
   const shutdown = async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     try {
       const cleanup = await hub.call({ type: "closeOwnedWindows" }, 4_000) as { closed?: number[]; skipped?: number[] };
       if (cleanup.skipped?.length) console.error(`[chrome-bridge] left windows open because another MCP client was attached: ${cleanup.skipped.join(", ")}`);
