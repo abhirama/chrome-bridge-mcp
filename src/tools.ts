@@ -461,7 +461,7 @@ export function registerTools(server: McpServer, hub: Hub, options: ToolOptions 
       const marker = (tab: any) => (tab.attached ? "*" : tab.shared ? "+" : " ");
       const lines = tabs.map(
         (tab) =>
-          `${marker(tab)} [${tab.id}] ${tab.active ? "(active) " : ""}${tab.title || "(untitled)"}\n      ${tab.url}`,
+          `${marker(tab)} [${tab.id}] (window ${tab.windowId}) ${tab.active ? "(active) " : ""}${tab.title || "(untitled)"}\n      ${tab.url}`,
       );
       const shared = tabs.some((tab) => tab.shared);
       const legend = `Open Chrome tabs ("*" = attached to us${shared ? `, "+" = also debugged by another client` : ""}):`;
@@ -503,6 +503,27 @@ export function registerTools(server: McpServer, hub: Hub, options: ToolOptions 
       const info = await browser.command<{ id: number }>("newTab", { url, active: !background });
       await browser.settle(500);
       return snapshot(`Opened ${url} in tab ${info.id}.`);
+    }),
+  );
+
+  server.registerTool(
+    "browser_new_window",
+    {
+      title: "Open an owned Chrome window",
+      description:
+        "Create a new normal Chrome window in this profile, open the requested URL, and attach this MCP client to it. " +
+        "The returned windowId is owned by this MCP client and may be closed with browser_close_window.",
+      inputSchema: {
+        url: z.string().describe("HTTP(S) URL to open in the new window."),
+        background: z.boolean().optional().describe("Open without focusing the new window. Defaults to false."),
+      },
+    },
+    guard(async ({ url, background }) => {
+      const info = await browser.command<{ id: number; windowId: number; title: string; url: string }>("newWindow", {
+        url,
+        active: !background,
+      });
+      return snapshot(`Opened owned Chrome window ${info.windowId} with tab ${info.id}.`);
     }),
   );
 
@@ -972,6 +993,21 @@ export function registerTools(server: McpServer, hub: Hub, options: ToolOptions 
       if (tabId === undefined) setPageBadge(false);
       await browser.command("closeTab", { tabId });
       return withNotifications(text("Tab closed."));
+    }),
+  );
+
+  server.registerTool(
+    "browser_close_window",
+    {
+      title: "Close an owned Chrome window",
+      description:
+        "Close a Chrome window created by this MCP client with browser_new_window. " +
+        "The bridge rejects window IDs this client does not own and refuses to close windows with another client's attached tab.",
+      inputSchema: { windowId: z.number().int().describe("windowId returned by browser_new_window in this MCP session.") },
+    },
+    guard(async ({ windowId }) => {
+      const result = await browser.command<{ ok: boolean; windowId: number }>("closeWindow", { windowId });
+      return withNotifications(text(`Owned Chrome window ${result.windowId} closed.`));
     }),
   );
 

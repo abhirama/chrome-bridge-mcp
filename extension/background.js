@@ -27,6 +27,8 @@ const BADGES = {
 let socket = null;
 /** clientId -> tabId. Each MCP process owns its own attachment. */
 let attachments = new Map();
+/** clientId -> Set<windowId>; only the client that created a window may close it. */
+let ownedWindows = new Map();
 /** tabId -> { logs, mainFrameId, nav, dialog } */
 let tabState = new Map();
 let agentGroupId = null;
@@ -58,6 +60,7 @@ function ownedTabs() {
 async function persist() {
   await chrome.storage.session.set({
     attachments: [...attachments],
+    ownedWindows: [...ownedWindows].map(([clientId, ids]) => [clientId, [...ids]]),
     agentGroupId,
     tabState: [...tabState].map(([id, v]) => [id, { ...v, logs: v.logs.slice(-MAX_LOGS) }]),
   });
@@ -69,8 +72,19 @@ async function persist() {
  * it as attached — otherwise tools would fail against a tab that looks bound.
  */
 async function rehydrate() {
-  const saved = await chrome.storage.session.get({ attachments: [], agentGroupId: null, tabState: [] });
+  const saved = await chrome.storage.session.get({ attachments: [], ownedWindows: [], agentGroupId: null, tabState: [] });
   agentGroupId = saved.agentGroupId;
+  ownedWindows = new Map();
+  for (const [clientId, ids] of saved.ownedWindows ?? []) {
+    const liveIds = new Set();
+    for (const id of ids) {
+      try {
+        await chrome.windows.get(Number(id));
+        liveIds.add(Number(id));
+      } catch { /* stale ownership entries are discarded */ }
+    }
+    if (liveIds.size) ownedWindows.set(clientId, liveIds);
+  }
   tabState = new Map((saved.tabState ?? []).map(([id, v]) => [Number(id), v]));
   attachments = new Map();
 
@@ -383,6 +397,78 @@ async function handle(command, clientId) {
       return handle({ type: "attach", tabId: tab.id }, clientId);
     }
 
+    case "newWindow": {
+      creatingOwnTab = true;
+      let created;
+      try {
+        created = await chrome.windows.create({
+          url: command.url,
+          focused: command.active !== false,
+          type: "normal",
+        });
+      } finally {
+        creatingOwnTab = false;
+      }
+      const tab = created?.tabs?.[0];
+      if (created?.id === undefined || tab?.id === undefined) {
+        throw new Error("Chrome did not return the created window and tab IDs.");
+      }
+      let owned = ownedWindows.get(clientId);
+      if (!owned) ownedWindows.set(clientId, (owned = new Set()));
+      owned.add(created.id);
+      await persist();
+      await waitForTabLoad(tab.id);
+      if (command.group !== false) await groupAgentTab(tab.id);
+      const attached = await handle({ type: "attach", tabId: tab.id }, clientId);
+      return { ...attached, windowId: created.id };
+    }
+
+    case "closeWindow": {
+      const windowId = Number(command.windowId);
+      const owned = ownedWindows.get(clientId);
+      if (!Number.isInteger(windowId) || !owned?.has(windowId)) {
+        throw new Error("Saarathi may close only a Chrome window created by this MCP client.");
+      }
+      const tabs = await chrome.tabs.query({ windowId });
+      for (const tab of tabs) {
+        if (tab.id === undefined) continue;
+        const otherOwner = [...attachments].find(([otherClient, tabId]) => tabId === tab.id && otherClient !== clientId);
+        if (otherOwner) throw new Error(`Cannot close window ${windowId}: tab ${tab.id} is attached by another MCP client.`);
+      }
+      for (const tab of tabs) {
+        if (tab.id === undefined) continue;
+        if (attachments.get(clientId) === tab.id) await releaseTab(clientId);
+      }
+      await chrome.windows.remove(windowId);
+      owned.delete(windowId);
+      if (owned.size === 0) ownedWindows.delete(clientId);
+      await persist();
+      return { ok: true, windowId };
+    }
+
+    case "closeOwnedWindows": {
+      const owned = ownedWindows.get(clientId);
+      const closed = [];
+      const skipped = [];
+      for (const windowId of [...(owned ?? [])]) {
+        const tabs = await chrome.tabs.query({ windowId });
+        const shared = tabs.some((tab) => tab.id !== undefined && [...attachments].some(([otherClient, tabId]) => tabId === tab.id && otherClient !== clientId));
+        if (shared) {
+          skipped.push(windowId);
+          continue;
+        }
+        for (const tab of tabs) {
+          if (tab.id !== undefined && attachments.get(clientId) === tab.id) await releaseTab(clientId);
+        }
+        await chrome.windows.remove(windowId);
+        closed.push(windowId);
+        owned?.delete(windowId);
+      }
+      if (owned?.size === 0) ownedWindows.delete(clientId);
+      await persist();
+      return { closed, skipped };
+    }
+
     case "closeTab": {
       const tabId = command.tabId ?? myTab;
       if (tabId === undefined || tabId === null) throw new Error("No tab to close.");
@@ -549,6 +635,16 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     notifyTab(tabId, `The attached tab (${tabId}) was closed.`);
     for (const [cid, owned] of [...attachments]) if (owned === tabId) attachments.delete(cid);
     tabState.delete(tabId);
+    await persist();
+  });
+});
+
+chrome.windows.onRemoved.addListener((windowId) => {
+  ensureReady().then(async () => {
+    for (const [clientId, ids] of ownedWindows) {
+      ids.delete(windowId);
+      if (ids.size === 0) ownedWindows.delete(clientId);
+    }
     await persist();
   });
 });
