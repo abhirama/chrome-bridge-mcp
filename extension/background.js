@@ -11,6 +11,8 @@
  * reconciled against the real debugger attachments) on each start.
  */
 
+import { readLaunchText, resolveSettings } from "./launch-config.js";
+
 const DEFAULT_PORT = 8787;
 const PROTOCOL_VERSION = "1.3";
 const MAX_LOGS = 300;
@@ -41,7 +43,8 @@ let ready = null;
 /* ------------------------------------------------------------------- state */
 
 async function settings() {
-  return chrome.storage.local.get({ port: DEFAULT_PORT, token: "", enabled: true });
+  const stored = await chrome.storage.local.get({ port: DEFAULT_PORT, token: "", enabled: true });
+  return resolveSettings(stored, await readLaunchText());
 }
 
 function stateFor(tabId) {

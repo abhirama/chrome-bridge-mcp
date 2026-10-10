@@ -2,3 +2,5 @@ node_modules/
 dist/
 *.log
 .DS_Store
+# Written by a launcher; holds the bridge token.
+extension/launch.json
