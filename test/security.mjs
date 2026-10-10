@@ -115,7 +115,8 @@ const tabs = await client.callTool({ name: "browser_tabs", arguments: {} });
 const body = tabs.content.map((p) => (p.type === "text" ? p.text : "")).join("");
 check("server still answers MCP calls after every rejection", /extension is not connected/i.test(body), body.slice(0, 140));
 const tools = await client.listTools();
-check("tool list is still served", tools.tools.length === 21, `got ${tools.tools.length}`);
+check("tool list is still served", tools.tools.length === 23, `got ${tools.tools.length}`);
+check("owned-window tools are advertised", tools.tools.some((tool) => tool.name === "browser_new_window") && tools.tools.some((tool) => tool.name === "browser_close_window"));
 
 await client.close();
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nAll security checks passed.");

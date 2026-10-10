@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/tools-21-10A37F?style=flat-square" alt="21 tools">
+  <img src="https://img.shields.io/badge/tools-23-10A37F?style=flat-square" alt="23 tools">
   <img src="https://img.shields.io/badge/tests-75%20real--world-0EA5A4?style=flat-square" alt="75 real-world tests">
   <img src="https://img.shields.io/badge/node-%E2%89%A520-1B2735?style=flat-square" alt="Node 20+">
   <img src="https://img.shields.io/badge/licence-MIT-1B2735?style=flat-square" alt="MIT">
@@ -249,6 +249,7 @@ directly.
 | `browser_tabs` | List every open tab across all windows |
 | `browser_attach` | Take control of an existing tab (this is what reuses the user's logins) |
 | `browser_new_tab` | Open and attach to a new tab |
+| `browser_new_window` | Create a normal Chrome window in this profile and attach to its first tab; returns a client-owned window ID |
 | `browser_navigate` | `goto` / `back` / `forward` / `reload` |
 | `browser_snapshot` | Ref-annotated outline of everything visible — the primary "what's on screen" tool |
 | `browser_text` | Readable page text |
@@ -265,7 +266,10 @@ directly.
 | `browser_evaluate` | Run a JS expression and get the value back |
 | `browser_console` | Console messages and uncaught errors |
 | `browser_cdp` | Raw CDP escape hatch |
-| `browser_close_tab` / `browser_detach` | Clean up |
+| `browser_close_tab` / `browser_detach` | Clean up tab attachments |
+| `browser_close_window` | Close only a window created by this MCP client |
+
+When an MCP server process shuts down, the bridge closes any windows that process created, unless another MCP client is still attached to a tab in that window. This keeps a task window visible during a running task or human handoff and cleans it up after the client exits. Pre-existing Chrome windows are never eligible for this cleanup.
 
 Snapshots include **iframe content**, nested under an `- iframe "<url>"` line with its own ref
 namespace, and clicks and typing inside frames are translated into the right coordinate space.

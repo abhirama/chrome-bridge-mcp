@@ -253,12 +253,12 @@ if (!connected) {
   process.exit(1);
 }
 
-await test("server advertises exactly the 21 documented tools", async () => {
+await test("server advertises exactly the 23 documented tools", async () => {
   const { tools } = await client.listTools();
   const names = tools.map((t) => t.name).sort();
   const expected = [
-    "browser_attach", "browser_cdp", "browser_click", "browser_close_tab", "browser_console",
-    "browser_detach", "browser_evaluate", "browser_handle_dialog", "browser_hover", "browser_navigate", "browser_new_tab",
+    "browser_attach", "browser_cdp", "browser_click", "browser_close_tab", "browser_close_window", "browser_console",
+    "browser_detach", "browser_evaluate", "browser_handle_dialog", "browser_hover", "browser_navigate", "browser_new_tab", "browser_new_window",
     "browser_press_key", "browser_screenshot", "browser_scroll", "browser_select_option",
     "browser_snapshot", "browser_tabs", "browser_text", "browser_type", "browser_upload",
     "browser_wait_for",
@@ -713,6 +713,63 @@ await test("browser_new_tab does NOT report itself as a surprise popup", async (
   if (Number.isFinite(id)) await call("browser_close_tab", { tabId: id });
   // Closing the attached tab clears the attachment; hand control back.
   await call("browser_attach", { tabId: secondTab });
+});
+
+await test("owned Chrome windows can be closed without closing pre-existing user windows", async () => {
+  const tabsBefore = await call("browser_tabs");
+  const existingLine = tabsBefore.text.split("\n").find((line) => line.includes(`[${secondTab}]`));
+  const existingWindowId = Number(existingLine?.match(/\(window (\d+)\)/)?.[1]);
+  if (!Number.isInteger(existingWindowId)) throw new Error(`could not find pre-existing window for tab ${secondTab}`);
+
+  const forbidden = await raw("browser_close_window", { windowId: existingWindowId });
+  if (!forbidden.isError || !/created by this MCP client/i.test(forbidden.text)) {
+    throw new Error(`bridge allowed closing a pre-existing window: ${forbidden.text}`);
+  }
+
+  const opened = await call("browser_new_window", { url: `${LOCAL}/form` });
+  const windowId = Number(opened.text.match(/owned Chrome window (\d+)/i)?.[1]);
+  const tabId = Number(opened.text.match(/with tab (\d+)/i)?.[1]);
+  if (!Number.isInteger(windowId) || !Number.isInteger(tabId)) throw new Error(opened.text.slice(0, 300));
+  try {
+    await call("browser_close_window", { windowId });
+    const closed = await raw("browser_close_window", { windowId });
+    if (!closed.isError || !/created by this MCP client/i.test(closed.text)) throw new Error("window ownership was not cleared after close");
+    const tabsAfter = await call("browser_tabs");
+    if (tabsAfter.text.includes(`[${tabId}]`)) throw new Error("owned task tab remains after its window was closed");
+    if (!tabsAfter.text.includes(`[${secondTab}]`)) throw new Error("closing the owned window also closed a pre-existing user tab");
+  } finally {
+    await raw("browser_close_window", { windowId });
+    await call("browser_attach", { tabId: secondTab });
+  }
+});
+
+await test("shutting down an MCP client closes its owned window but preserves user windows", async () => {
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: [path.join(root, "dist", "index.js"), "--port", PORT],
+    stderr: "inherit",
+  });
+  const shortLived = new Client({ name: "owned-window-cleanup-test", version: "1.0.0" });
+  await shortLived.connect(transport);
+  const opened = await shortLived.callTool({ name: "browser_new_window", arguments: { url: `${LOCAL}/form` } });
+  const openedText = opened.content.filter((part) => part.type === "text").map((part) => part.text).join("\n");
+  const tabId = Number(openedText.match(/with tab (\d+)/i)?.[1]);
+  if (!Number.isInteger(tabId)) throw new Error(openedText.slice(0, 300));
+  const pid = transport.pid;
+  if (!pid) throw new Error("could not find short-lived MCP server process");
+  const exited = new Promise((resolve) => transport.onclose = resolve);
+  process.kill(pid, "SIGTERM");
+  await Promise.race([exited, sleep(6000).then(() => { throw new Error("MCP server did not shut down"); })]);
+  await shortLived.close();
+
+  let tabsAfter;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    tabsAfter = await call("browser_tabs");
+    if (!tabsAfter.text.includes(`[${tabId}]`)) break;
+    await sleep(200);
+  }
+  if (tabsAfter.text.includes(`[${tabId}]`)) throw new Error("client-owned window remained open after MCP shutdown");
+  if (!tabsAfter.text.includes(`[${secondTab}]`)) throw new Error("MCP shutdown closed a pre-existing user tab");
 });
 
 await test("closing the attached tab really removes it from the browser", async () => {
