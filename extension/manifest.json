@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Chrome Bridge for MCP",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxiWNcMS6YnSMoPWzzlL1IlBiZMswRCsaUEYMwRRRc2Pj2aTSdwcioQeOf7aGJw8Bb7uZaEbxC0DrFzhciwVi+A7ZvEiJ7qM0igXx8fBb6CHEqrIzGmU9pQY9/HNTctItra/PoiVy10wkFprO5Ug67Nx34CFIDvcIBm4loygkyIfJSPh8G4otv2IarQAREXYcMPFaGrr4WDbxffTlBr/Bm+85bldv6V7WvmmFq+fl1inN/Cv4nV334/g22XYSDaXbLanVfVPprvCvtw47cGPkh2SesuJJ/qMZoTj8Y1oRohxtMj2rwY1ai5AIl7oB9iyYsv797p72VSy4uZew+O1sJwIDAQAB",
   "description": "Lets a local MCP server drive this Chrome profile \u2014 your real tabs, cookies and logged-in sessions \u2014 over the Chrome DevTools Protocol.",
   "minimum_chrome_version": "116",

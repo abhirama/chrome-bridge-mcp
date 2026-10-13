@@ -283,6 +283,14 @@ loudly instead of silently resolving to a different element.
 Values of password, OTP, email, phone and payment-shaped fields are reported as `<redacted>` rather
 than echoed into the transcript.
 
+**The `URL:` line cannot be forged by the page.** Snapshot and `browser_text` results start with
+`URL: <address>`, taken from Chrome's frame tree rather than from page script, then `Title:`, then the
+action's label. No other line of any tool result starts with `URL:`: page-supplied text (titles,
+element ids, snapshot and text bodies, error messages) has later `URL:` lines indented by two
+spaces, and CR, U+2028 and U+2029 count as line breaks for this. A consumer may therefore trust the
+first line matching `/^URL:/m`. Labels and refs still come from page-world script, so a hostile page
+can still misdescribe its own elements.
+
 ## Visual feedback
 
 While a tab is attached you get three signals, in decreasing order of usefulness:

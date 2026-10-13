@@ -11,6 +11,7 @@ import {
   SNAPSHOT_SCRIPT,
   TEXT_SCRIPT,
 } from "./pagescript.js";
+import { fenceUrlLines, oneLine } from "./report-text.js";
 
 type Content =
   | { type: "text"; text: string }
@@ -172,6 +173,17 @@ class Browser {
   /** Execution context that issued a ref, so frame-scoped tools evaluate in the right world. */
   contextFor(ref: string): number | undefined {
     return this.frames.get(ref.split("-")[0])?.contextId;
+  }
+
+  /**
+   * The main frame's address as Chrome records it. Unlike `location.href` read
+   * by page-world script, the page cannot forge it (saarathi#46).
+   */
+  async mainFrameUrl(): Promise<string> {
+    const tree = await this.cdp("Page.getFrameTree", {});
+    const url = tree?.frameTree?.frame?.url;
+    if (typeof url !== "string" || !url) throw new Error("main frame URL unavailable");
+    return url;
   }
 
   /** Enumerates child frames and snapshots each one in its own isolated world. */
@@ -369,13 +381,30 @@ class Browser {
 
 const text = (value: string): ToolResult => ({ content: [{ type: "text", text: value }] });
 
+/**
+ * Indents every `URL:` line a result carries except line 1 of its first text
+ * item, where snapshot and browser_text put the address from Chrome. Page text
+ * reaches results through titles, ids, bodies and error messages; this keeps
+ * all of it from adding an address line a consumer would trust (saarathi#46).
+ */
+function fenceResult(result: ToolResult): ToolResult {
+  let first = true;
+  result.content = result.content.map((item) => {
+    if (item.type !== "text") return item;
+    const fenced = { ...item, text: fenceUrlLines(item.text, first ? 1 : 0) };
+    first = false;
+    return fenced;
+  });
+  return result;
+}
+
 /** Wraps a handler so thrown errors become MCP tool errors instead of transport failures. */
 function guard(handler: (args: any) => Promise<ToolResult>) {
   return async (args: any): Promise<ToolResult> => {
     try {
-      return await handler(args);
+      return fenceResult(await handler(args));
     } catch (error) {
-      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+      return fenceResult({ content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true });
     }
   };
 }
@@ -420,15 +449,17 @@ export function registerTools(server: McpServer, hub: Hub, options: ToolOptions 
     browser.frames.clear();
     browser.frames.set(page.epoch, { offsetX: 0, offsetY: 0 });
     const frameBlocks = await browser.frameSnapshots();
+    const url = await browser.mainFrameUrl();
     // Re-applied after every action because navigation resets the page's icon links.
     setPageBadge(true);
+    // URL: is line 1 and comes from Chrome; guard() fences any later URL: line.
     return withNotifications(
       text(
         [
-          label,
-          extra,
-          `URL: ${page.url}`,
-          `Title: ${page.title}`,
+          `URL: ${url}`,
+          `Title: ${oneLine(page.title)}`,
+          oneLine(label),
+          extra && oneLine(extra),
           "",
           "Page snapshot (use [ref=...] values with browser_click / browser_type):",
           page.snapshot,
@@ -461,7 +492,7 @@ export function registerTools(server: McpServer, hub: Hub, options: ToolOptions 
       const marker = (tab: any) => (tab.attached ? "*" : tab.shared ? "+" : " ");
       const lines = tabs.map(
         (tab) =>
-          `${marker(tab)} [${tab.id}] (window ${tab.windowId}) ${tab.active ? "(active) " : ""}${tab.title || "(untitled)"}\n      ${tab.url}`,
+          `${marker(tab)} [${tab.id}] (window ${tab.windowId}) ${tab.active ? "(active) " : ""}${oneLine(tab.title || "(untitled)")}\n      ${tab.url}`,
       );
       const shared = tabs.some((tab) => tab.shared);
       const legend = `Open Chrome tabs ("*" = attached to us${shared ? `, "+" = also debugged by another client` : ""}):`;
@@ -541,7 +572,7 @@ export function registerTools(server: McpServer, hub: Hub, options: ToolOptions 
     },
     guard(async ({ action, url }) => {
       browser.markBusy();
-      const before = await browser.evalJson<string>(`JSON.stringify(location.href)`).catch(() => "");
+      const before = await browser.mainFrameUrl().catch(() => "");
 
       if (action === "goto") {
         if (!url) throw new Error("`url` is required when action is 'goto'.");
@@ -561,7 +592,7 @@ export function registerTools(server: McpServer, hub: Hub, options: ToolOptions 
 
       await browser.settleNavigation();
       await browser.settle(400);
-      const after = await browser.evalJson<string>(`JSON.stringify(location.href)`).catch(() => "");
+      const after = await browser.mainFrameUrl().catch(() => "");
 
       // A URL serving an attachment downloads instead of navigating; saying
       // "complete" while the page never moved sends the agent down a dead end.
@@ -598,9 +629,10 @@ export function registerTools(server: McpServer, hub: Hub, options: ToolOptions 
     },
     guard(async ({ maxChars }) => {
       const limit = maxChars ?? 20_000;
-      const page = await browser.evalJson<{ url: string; title: string; text: string }>(TEXT_SCRIPT);
+      const page = await browser.evalJson<{ title: string; text: string }>(TEXT_SCRIPT);
+      const url = await browser.mainFrameUrl();
       const body = page.text.length > limit ? `${page.text.slice(0, limit)}\n… (truncated)` : page.text;
-      return withNotifications(text(`URL: ${page.url}\nTitle: ${page.title}\n\n${body}`));
+      return withNotifications(text(`URL: ${url}\nTitle: ${oneLine(page.title)}\n\n${body}`));
     }),
   );
 
