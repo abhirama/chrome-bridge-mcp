@@ -598,6 +598,12 @@ await test("a hostile page cannot forge or add a URL: line (saarathi#46)", async
   assertSingleRealUrl(text, `${LOCAL}/hostile`);
 });
 
+await test("a fragment-only goto keeps the fragment and is not called a download (saarathi#46)", async () => {
+  const nav = (await call("browser_navigate", { action: "goto", url: `${LOCAL}/hostile#frag` })).text;
+  assertSingleRealUrl(nav, `${LOCAL}/hostile#frag`);
+  if (/did not navigate/i.test(nav)) throw new Error(`false stalled-download note:\n${nav.slice(0, 300)}`);
+});
+
 await test("scrolling a real long page reveals off-screen content", async () => {
   await call("browser_navigate", { action: "goto", url: `${LOCAL}/long` });
   await sleep(600);

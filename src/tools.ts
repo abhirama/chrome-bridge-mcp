@@ -181,9 +181,28 @@ class Browser {
    */
   async mainFrameUrl(): Promise<string> {
     const tree = await this.cdp("Page.getFrameTree", {});
-    const url = tree?.frameTree?.frame?.url;
+    const frame = tree?.frameTree?.frame;
+    const url = frame?.url;
     if (typeof url !== "string" || !url) throw new Error("main frame URL unavailable");
-    return url;
+    // `url` omits the fragment; keep it so the address matches location.href.
+    return url + (typeof frame.urlFragment === "string" ? frame.urlFragment : "");
+  }
+
+  /**
+   * Runs `read` with the main frame URL taken before and after it, and returns
+   * both only when they agree. A page that navigates mid-read would otherwise
+   * get its content reported under the next page's address; after three
+   * disagreeing attempts this throws, and the error result carries no URL line.
+   */
+  async readAtStableUrl<T>(read: () => Promise<T>): Promise<{ url: string; value: T }> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const before = await this.mainFrameUrl();
+      const value = await read();
+      const url = await this.mainFrameUrl();
+      if (url === before) return { url, value };
+      await this.settleNavigation();
+    }
+    throw new Error("The page kept navigating while it was being read. Take a fresh snapshot.");
   }
 
   /** Enumerates child frames and snapshots each one in its own isolated world. */
@@ -439,17 +458,21 @@ export function registerTools(server: McpServer, hub: Hub, options: ToolOptions 
       );
     }
     await browser.settleNavigation();
-    let page = await browser.evalJson<Page>(SNAPSHOT_SCRIPT);
-    // A click or submit that navigates can leave the document bodyless briefly.
-    for (let retry = 0; page.loading && retry < 3; retry++) {
-      await browser.settle(500);
-      page = await browser.evalJson<Page>(SNAPSHOT_SCRIPT);
-    }
-
-    browser.frames.clear();
-    browser.frames.set(page.epoch, { offsetX: 0, offsetY: 0 });
-    const frameBlocks = await browser.frameSnapshots();
-    const url = await browser.mainFrameUrl();
+    const {
+      url,
+      value: { page, frameBlocks },
+    } = await browser.readAtStableUrl(async () => {
+      let page = await browser.evalJson<Page>(SNAPSHOT_SCRIPT);
+      // A click or submit that navigates can leave the document bodyless briefly.
+      for (let retry = 0; page.loading && retry < 3; retry++) {
+        await browser.settle(500);
+        page = await browser.evalJson<Page>(SNAPSHOT_SCRIPT);
+      }
+      browser.frames.clear();
+      browser.frames.set(page.epoch, { offsetX: 0, offsetY: 0 });
+      const frameBlocks = await browser.frameSnapshots();
+      return { page, frameBlocks };
+    });
     // Re-applied after every action because navigation resets the page's icon links.
     setPageBadge(true);
     // URL: is line 1 and comes from Chrome; guard() fences any later URL: line.
@@ -629,8 +652,9 @@ export function registerTools(server: McpServer, hub: Hub, options: ToolOptions 
     },
     guard(async ({ maxChars }) => {
       const limit = maxChars ?? 20_000;
-      const page = await browser.evalJson<{ title: string; text: string }>(TEXT_SCRIPT);
-      const url = await browser.mainFrameUrl();
+      const { url, value: page } = await browser.readAtStableUrl(() =>
+        browser.evalJson<{ title: string; text: string }>(TEXT_SCRIPT),
+      );
       const body = page.text.length > limit ? `${page.text.slice(0, limit)}\n… (truncated)` : page.text;
       return withNotifications(text(`URL: ${url}\nTitle: ${oneLine(page.title)}\n\n${body}`));
     }),
