@@ -1,6 +1,6 @@
 {
   "name": "chrome-bridge-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP server that drives your already-running, already-logged-in Chrome via a companion extension using chrome.debugger/CDP. Clean-room equivalent of the Codex/ChatGPT desktop Chrome tool.",
   "type": "module",
   "bin": {
@@ -21,7 +21,7 @@
     "dev": "tsc -p tsconfig.json --watch",
     "start": "node dist/index.js",
     "hub": "node dist/index.js --hub-only",
-    "test": "node test/launch-config.mjs && node test/security.mjs && node test/smoke.mjs && node test/multi-client.mjs",
+    "test": "node test/report-text.mjs && node test/launch-config.mjs && node test/security.mjs && node test/smoke.mjs && node test/multi-client.mjs",
     "test:coexist": "node test/two-extensions.mjs",
     "test:e2e": "node test/e2e.mjs",
     "test:all": "npm run test && npm run test:e2e",
